@@ -36,6 +36,7 @@ interface NewWorkspaceScreenProps {
   serverId: string;
   sourceDirectory: string;
   displayName?: string;
+  initialRefName?: string;
 }
 
 interface PickerOptionData {
@@ -50,6 +51,11 @@ interface PickerSelection {
 
 const BRANCH_OPTION_PREFIX = "branch:";
 const PR_OPTION_PREFIX = "github-pr:";
+
+function createInitialPickerSelection(initialRefName: string | undefined): PickerSelection | null {
+  const refName = initialRefName?.trim();
+  return refName ? { item: { kind: "branch", name: refName }, attachedPrNumber: null } : null;
+}
 
 function RefPickerBadgeContent({
   selectedItem,
@@ -408,6 +414,7 @@ export function NewWorkspaceScreen({
   serverId,
   sourceDirectory,
   displayName: displayNameProp,
+  initialRefName,
 }: NewWorkspaceScreenProps) {
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
@@ -422,7 +429,9 @@ export function NewWorkspaceScreen({
     typeof normalizeWorkspaceDescriptor
   > | null>(null);
   const [pendingAction, setPendingAction] = useState<"chat" | null>(null);
-  const [pickerSelection, setPickerSelection] = useState<PickerSelection | null>(null);
+  const [pickerSelection, setPickerSelection] = useState<PickerSelection | null>(() =>
+    createInitialPickerSelection(initialRefName),
+  );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearchQuery, setPickerSearchQuery] = useState("");
   const [debouncedPickerSearchQuery, setDebouncedPickerSearchQuery] = useState("");

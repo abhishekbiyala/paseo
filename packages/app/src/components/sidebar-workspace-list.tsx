@@ -192,6 +192,7 @@ interface WorkspaceRowInnerProps {
   archiveStatus?: "idle" | "pending" | "success";
   archivePendingLabel?: string;
   onArchive?: () => void;
+  onCreateFromBranch?: () => void;
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
@@ -596,7 +597,8 @@ function ProjectKebabMenu({
 function WorkspaceRowRightGroup({
   workspace,
   isHovered,
-  isTouchPlatform,
+  isMobileBreakpoint,
+  isNative,
   showScriptsIcon,
   hasRunningService,
   isCreating,
@@ -608,12 +610,14 @@ function WorkspaceRowRightGroup({
   archivePendingLabel,
   archiveShortcutKeys,
   onArchive,
+  onCreateFromBranch,
   onCopyBranchName,
   onCopyPath,
 }: {
   workspace: SidebarWorkspaceEntry;
   isHovered: boolean;
-  isTouchPlatform: boolean;
+  isMobileBreakpoint: boolean;
+  isNative: boolean;
   showScriptsIcon: boolean;
   hasRunningService: boolean;
   isCreating: boolean;
@@ -625,10 +629,13 @@ function WorkspaceRowRightGroup({
   archivePendingLabel?: string;
   archiveShortcutKeys?: ShortcutKey[][] | null;
   onArchive?: () => void;
+  onCreateFromBranch?: () => void;
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
 }) {
-  const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform));
+  const actionsVisible = isHovered || isNative || isMobileBreakpoint;
+  const canCreateFromBranch = workspace.workspaceKind === "local_checkout";
+  const showKebab = Boolean(onArchive && actionsVisible);
   return (
     <View style={styles.workspaceRowRight}>
       {showScriptsIcon ? (
@@ -641,6 +648,16 @@ function WorkspaceRowRightGroup({
         </View>
       ) : null}
       {isCreating ? <Text style={styles.workspaceCreatingText}>Creating...</Text> : null}
+      {canCreateFromBranch && onCreateFromBranch ? (
+        <NewWorktreeButton
+          displayName={workspace.name}
+          onPress={onCreateFromBranch}
+          visible={actionsVisible}
+          testID={`sidebar-workspace-create-from-branch-${workspace.workspaceKey}`}
+          tooltipLabel="New workspace from this branch"
+          accessibilityLabel={`Create a new workspace from ${workspace.name}`}
+        />
+      ) : null}
       {showKebab && onArchive ? (
         <WorkspaceKebabMenu
           workspaceKey={workspace.workspaceKey}
@@ -877,6 +894,8 @@ function NewWorktreeButton({
   visible,
   loading = false,
   testID,
+  tooltipLabel = "New workspace",
+  accessibilityLabel,
   showShortcutHint = false,
 }: {
   displayName: string;
@@ -884,6 +903,8 @@ function NewWorktreeButton({
   visible: boolean;
   loading?: boolean;
   testID: string;
+  tooltipLabel?: string;
+  accessibilityLabel?: string;
   showShortcutHint?: boolean;
 }) {
   const { theme } = useUnistyles();
@@ -915,7 +936,7 @@ function NewWorktreeButton({
             onPress={handlePress}
             disabled={loading}
             accessibilityRole="button"
-            accessibilityLabel={`Create a new workspace for ${displayName}`}
+            accessibilityLabel={accessibilityLabel ?? `Create a new workspace for ${displayName}`}
             testID={testID}
           >
             {({ hovered, pressed }) =>
@@ -934,7 +955,7 @@ function NewWorktreeButton({
         </TooltipTrigger>
         <TooltipContent side="bottom" align="center" offset={8}>
           <View style={styles.projectActionTooltipRow}>
-            <Text style={styles.projectActionTooltipText}>New workspace</Text>
+            <Text style={styles.projectActionTooltipText}>{tooltipLabel}</Text>
             {showShortcutHint && newWorktreeKeys ? (
               <Shortcut chord={newWorktreeKeys} style={styles.projectActionTooltipShortcut} />
             ) : null}
@@ -1327,14 +1348,14 @@ function WorkspaceRowInner({
   archiveStatus = "idle",
   archivePendingLabel,
   onArchive,
+  onCreateFromBranch,
   onCopyBranchName,
   onCopyPath,
   archiveShortcutKeys,
 }: WorkspaceRowInnerProps) {
   const { theme } = useUnistyles();
-  const _isCompact = useIsCompactFormFactor();
+  const isMobileBreakpoint = useIsCompactFormFactor();
   const [isHovered, setIsHovered] = useState(false);
-  const isTouchPlatform = platformIsNative;
   const workspaceDirectory = resolveWorkspaceExecutionDirectory({
     workspaceDirectory: workspace.workspaceDirectory,
   });
@@ -1370,7 +1391,7 @@ function WorkspaceRowInner({
     [isDragging, selected, isHovered],
   );
 
-  const isDesktop = !isTouchPlatform;
+  const isDesktop = !platformIsNative;
   const showScriptsIcon = isDesktop && workspace.hasRunningScripts;
   const hasRunningService = workspace.scripts.some(
     (s) => s.lifecycle === "running" && (s.type ?? "service") === "service",
@@ -1421,7 +1442,8 @@ function WorkspaceRowInner({
             <WorkspaceRowRightGroup
               workspace={workspace}
               isHovered={isHovered}
-              isTouchPlatform={isTouchPlatform}
+              isMobileBreakpoint={isMobileBreakpoint}
+              isNative={platformIsNative}
               showScriptsIcon={showScriptsIcon}
               hasRunningService={hasRunningService}
               isCreating={isCreating}
@@ -1433,6 +1455,7 @@ function WorkspaceRowInner({
               archivePendingLabel={archivePendingLabel}
               archiveShortcutKeys={archiveShortcutKeys}
               onArchive={onArchive}
+              onCreateFromBranch={onCreateFromBranch}
               onCopyBranchName={onCopyBranchName}
               onCopyPath={onCopyPath}
             />
@@ -1451,10 +1474,12 @@ function WorkspaceRowInner({
 
 function WorkspaceRowWithMenu({
   workspace,
+  displayName,
   selected,
   shortcutNumber,
   showShortcutBadge,
   onPress,
+  onWorkspacePress,
   drag,
   isDragging,
   dragHandleProps,
@@ -1462,10 +1487,12 @@ function WorkspaceRowWithMenu({
   isCreating = false,
 }: {
   workspace: SidebarWorkspaceEntry;
+  displayName: string;
   selected: boolean;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
   onPress: () => void;
+  onWorkspacePress?: () => void;
   drag: () => void;
   isDragging: boolean;
   dragHandleProps?: DraggableListDragHandleProps;
@@ -1619,6 +1646,27 @@ function WorkspaceRowWithMenu({
     toast.copied("Branch name copied");
   }, [toast, workspace.name]);
 
+  const handleCreateFromBranch = useCallback(() => {
+    if (!workspaceDirectory) {
+      toast.error("Workspace path not available");
+      return;
+    }
+    router.navigate(
+      buildHostNewWorkspaceRoute(workspace.serverId, workspaceDirectory, {
+        displayName,
+        refName: workspace.name,
+      }) as Href,
+    );
+    onWorkspacePress?.();
+  }, [
+    displayName,
+    onWorkspacePress,
+    toast,
+    workspace.name,
+    workspace.serverId,
+    workspaceDirectory,
+  ]);
+
   const archiveShortcutKeys = useShortcutKeys("archive-worktree");
 
   useKeyboardActionHandler({
@@ -1653,6 +1701,7 @@ function WorkspaceRowWithMenu({
       archiveStatus={getWorkspaceArchiveStatus(isWorktree, archiveStatus, isArchivingWorkspace)}
       archivePendingLabel={isWorktree ? "Archiving..." : "Hiding..."}
       onArchive={isWorktree ? handleArchiveWorktree : handleArchiveWorkspace}
+      onCreateFromBranch={handleCreateFromBranch}
       onCopyBranchName={canCopyBranchName ? handleCopyBranchName : undefined}
       onCopyPath={handleCopyPath}
       archiveShortcutKeys={selected ? archiveShortcutKeys : null}
@@ -1897,6 +1946,7 @@ function FlattenedProjectRow({
 
 interface WorkspaceRowItemProps {
   workspace: SidebarWorkspaceEntry;
+  displayName: string;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
   canCopyBranchName: boolean;
@@ -1912,6 +1962,7 @@ interface WorkspaceRowItemProps {
 
 function WorkspaceRowItem({
   workspace,
+  displayName,
   shortcutNumber,
   showShortcutBadge,
   canCopyBranchName,
@@ -1935,12 +1986,14 @@ function WorkspaceRowItem({
   return (
     <WorkspaceRow
       workspace={workspace}
+      displayName={displayName}
       shortcutNumber={shortcutNumber}
       showShortcutBadge={showShortcutBadge}
       canCopyBranchName={canCopyBranchName}
       isCreating={isCreating}
       selectionEnabled={selectionEnabled}
       onPress={handlePress}
+      onWorkspacePress={onWorkspacePress}
       drag={drag ?? noop}
       isDragging={isDragging}
       dragHandleProps={dragHandleProps}
@@ -1950,9 +2003,11 @@ function WorkspaceRowItem({
 
 function WorkspaceRow({
   workspace,
+  displayName,
   shortcutNumber,
   showShortcutBadge,
   onPress,
+  onWorkspacePress,
   drag,
   isDragging,
   dragHandleProps,
@@ -1961,9 +2016,11 @@ function WorkspaceRow({
   selectionEnabled,
 }: {
   workspace: SidebarWorkspaceEntry;
+  displayName: string;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
   onPress: () => void;
+  onWorkspacePress?: () => void;
   drag: () => void;
   isDragging: boolean;
   dragHandleProps?: DraggableListDragHandleProps;
@@ -1985,10 +2042,12 @@ function WorkspaceRow({
   return (
     <WorkspaceRowWithMenu
       workspace={hydratedWorkspace}
+      displayName={displayName}
       selected={selected}
       shortcutNumber={shortcutNumber}
       showShortcutBadge={showShortcutBadge}
       onPress={onPress}
+      onWorkspacePress={onWorkspacePress}
       drag={drag}
       isDragging={isDragging}
       dragHandleProps={dragHandleProps}
@@ -2070,6 +2129,7 @@ function ProjectBlock({
       return (
         <WorkspaceRowItem
           workspace={item}
+          displayName={displayName}
           shortcutNumber={shortcutIndexByWorkspaceKey.get(item.workspaceKey) ?? null}
           showShortcutBadge={showShortcutBadges}
           canCopyBranchName={project.projectKind === "git"}
@@ -2088,6 +2148,7 @@ function ProjectBlock({
       project.projectKind,
       creatingWorkspaceIds,
       currentPathname,
+      displayName,
       onWorkspacePress,
       serverId,
       selectionEnabled,
@@ -2759,7 +2820,7 @@ const styles = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[1],
     paddingVertical: theme.spacing[2],
     paddingLeft: theme.spacing[3] + theme.spacing[3],
-    paddingRight: theme.spacing[3],
+    paddingRight: theme.spacing[2],
     borderRadius: theme.borderRadius.lg,
     flexDirection: "column",
     alignItems: "stretch",
@@ -2784,7 +2845,7 @@ const styles = StyleSheet.create((theme) => ({
   workspaceRowRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
+    gap: 2,
     flexShrink: 0,
   },
   workspaceRowHovered: {
@@ -2867,9 +2928,12 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   kebabButton: {
-    padding: 2,
-    borderRadius: 4,
-    marginLeft: 2,
+    width: 24,
+    height: 24,
+    borderRadius: theme.borderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
   kebabButtonHovered: {
     backgroundColor: theme.colors.surface2,

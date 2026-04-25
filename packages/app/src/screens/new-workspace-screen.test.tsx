@@ -586,11 +586,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderScreen() {
+function renderScreen(props: Partial<React.ComponentProps<typeof NewWorkspaceScreen>> = {}) {
   act(() => {
     root?.render(
       <QueryClientProvider client={queryClient!}>
-        <NewWorkspaceScreen serverId="server" sourceDirectory="/repo" />
+        <NewWorkspaceScreen serverId="server" sourceDirectory="/repo" {...props} />
       </QueryClientProvider>,
     );
   });
@@ -688,6 +688,22 @@ describe("NewWorkspaceScreen picker payload", () => {
     expect(call).not.toHaveProperty("refName");
     expect(call).not.toHaveProperty("action");
     expect(call).not.toHaveProperty("githubPrNumber");
+  });
+
+  it("sends the initial ref as the starting branch when provided", async () => {
+    renderScreen({ initialRefName: "feature/search" });
+    await flush();
+
+    click(await findByTestId("test-composer-submit"));
+    await flush();
+
+    expect(mockClient.createPaseoWorktree).toHaveBeenCalledTimes(1);
+    expect(firstCreateWorktreeCall()).toMatchObject({
+      cwd: "/repo",
+      worktreeSlug: "gentle-slug",
+      action: "branch-off",
+      refName: "feature/search",
+    });
   });
 
   it("opens the new workspace draft tab as soon as the worktree is ready", async () => {
